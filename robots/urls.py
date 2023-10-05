@@ -1,8 +1,8 @@
 from django.urls import path
 
-from .views import NewRobot
+from .views import RobotView
 
 
 urlpatterns = [
-    path('', NewRobot.as_view())
+    path('', RobotView.as_view())
 ]
