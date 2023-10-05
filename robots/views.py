@@ -7,16 +7,20 @@ from django.http import JsonResponse, HttpResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+from django.core.mail import send_mail
 
 from .models import Robot, RobotModel
+from orders.models import Order
+
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class NewRobot(View):
+class RobotView(View):
 
     def post(self, request):
         data = json.loads(request.body.decode('utf-8'))
         robot_model_name = data.pop('model')
+        version = data['version']
         try:
             robot_model = RobotModel.objects.get(name=robot_model_name)
         except RobotModel.DoesNotExist:
@@ -25,12 +29,13 @@ class NewRobot(View):
                 data={'error_message': 'Такой модели не существует'}
             )
 
+        serial = robot_model_name + '-' + version
         robot = Robot.objects.create(
             model=robot_model,
-            serial=robot_model_name + '-' + data['version'],
+            serial=serial,
             **data,
         )
-
+        self.send_email(serial, robot_model_name, version)
         return JsonResponse(status=201, data={'id': robot.id})
 
     def get(self, request):
@@ -72,4 +77,23 @@ class NewRobot(View):
                 excel_list.append(row)
             list_ind += 1
         wb.save(response)
+
         return response
+
+    @staticmethod
+    def send_email(serial, model, version):
+
+        orders = Order.objects.filter(robot_serial=serial)
+
+        for order in orders:
+            send_mail(
+                'Ваш заказ на робота',
+                f'Добрый день! \n'
+                f'Недавно вы интересовались нашим роботом модели'
+                f'{model}, версии {version}. \n'
+                f'Этот робот теперь в наличии. Если вам подходит этот вариант - '
+                f'пожалуйста, свяжитесь с нами',
+                'robots@robots.com',
+                [order.customer],
+                fail_silently=False
+            )
